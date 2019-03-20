@@ -45,3 +45,22 @@ can retrieve at any point:
 AttributeDataset ad = dataset.getDataset();
 ```
 
+By default, the annotation created a _nominal_ attribute for the field, but this
+can be explicitly declared by using the `AttributeType`:
+
+```java
+public class Foo {
+
+    @RandomForestFeature(type = AttributeType.STRING)
+    private final String bar;
+
+    @RandomForestFeature(type = AttributeType.NUMERIC)
+    private final int baz;
+
+
+    public Foo(String bar, int baz) {
+        this.bar = bar;
+        this.baz = baz;
+    }
+}
+```

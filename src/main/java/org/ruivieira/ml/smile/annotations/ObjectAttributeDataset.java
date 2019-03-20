@@ -1,8 +1,6 @@
 package org.ruivieira.ml.smile.annotations;
 
-import smile.data.Attribute;
-import smile.data.AttributeDataset;
-import smile.data.NominalAttribute;
+import smile.data.*;
 
 import java.lang.reflect.Field;
 import java.text.ParseException;
@@ -11,50 +9,69 @@ import java.util.List;
 
 public class ObjectAttributeDataset<T, R> {
 
-    private List<String> attributesNames = new ArrayList<>();
     private Attribute[] attributes = new Attribute[]{};
     private Attribute responseAttribute = null;
     private AttributeDataset dataset = null;
     private final String name;
     private final String responseName;
+    private boolean initialised = false;
 
     public ObjectAttributeDataset(String name, String responseName) {
         this.name = name;
         this.responseName = responseName;
     }
 
-    private final List<String> extractAnnotatedAttributes(T object) {
-        List<String> fieldNames = new ArrayList<>();
+    private final Attribute[] extractAnnotatedTypes(T object) {
+        List<Attribute> fieldTypes = new ArrayList<>();
         for(Field field  : object.getClass().getDeclaredFields()) {
             field.setAccessible(true);
             if (field.isAnnotationPresent(RandomForestFeature.class)) {
-                fieldNames.add(field.getName());
+                Attribute attribute;
+                final RandomForestFeature annotation = field.getAnnotation(RandomForestFeature.class);
+                switch (annotation.type()) {
+                    case STRING:
+                        attribute = new StringAttribute(field.getName());
+                        break;
+                    case NOMINAL:
+                        attribute = new NominalAttribute(field.getName());
+                        break;
+                    case NUMERIC:
+                        attribute = new NumericAttribute(field.getName());
+                        break;
+                    default:
+                        attribute = new NominalAttribute(field.getName());
+                }
+                fieldTypes.add(attribute);
             }
         }
-        return fieldNames;
+        return fieldTypes.toArray(new Attribute[0]);
     }
 
     public void add(T object, R response) throws IllegalAccessException, ParseException {
-        if (attributesNames.size() == 0) {
-            attributesNames = extractAnnotatedAttributes(object);
-            final int n = attributesNames.size();
-            attributes = new Attribute[n];
-            for (int i = 0 ; i < n ; i++) {
-                attributes[i] = new NominalAttribute(attributesNames.get(i));
-            }
+        if (!initialised) {
+//            attributesNames = extractAnnotatedNames(object);
+            attributes = extractAnnotatedTypes(object);
             responseAttribute = new NominalAttribute(responseName);
             dataset = new AttributeDataset(name, attributes, responseAttribute);
+            initialised = true;
         }
 
         Field[] fields = object.getClass().getDeclaredFields();
         final int k = fields.length;
-        final double[] features = new double[k];
+        final double[] features = new double[attributes.length];
+        int index = 0;
         for (int i = 0 ; i < k ; i++) {
             Field field = fields[i];
             field.setAccessible(true);
-            Object value = field.get(object);
-            Attribute attribute = attributes[i];
-            features[i] = attribute.valueOf(value.toString());
+            if (field.isAnnotationPresent(RandomForestFeature.class)) {
+                Object value = field.get(object);
+                if (attributes[index].getType() == Attribute.Type.NUMERIC) {
+                    features[index] = Double.valueOf(value.toString());
+                } else {
+                    features[index] = attributes[index].valueOf(value.toString());
+                }
+                index++;
+            }
         }
         dataset.add(features, (int) responseAttribute.valueOf(response.toString()));
     }
